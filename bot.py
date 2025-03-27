@@ -1,8 +1,12 @@
 import os
 import json
 import logging
+import asyncio
+import threading
 from pyrogram import Client, filters
 from pyrogram.types import Message
+from pyrogram.errors import PeerIdInvalid, FloodWait
+from flask import Flask
 
 # Enable logging for debugging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -101,8 +105,27 @@ async def forward_messages(client, message: Message):
                 chat = await client.get_chat(int(dest_id))
                 await message.forward(chat.id)
                 logging.info(f"✅ Forwarded message from {source_id} to {dest_id}")
+            except PeerIdInvalid:
+                logging.error(f"❌ Invalid Peer ID: {dest_id}")
+            except FloodWait as e:
+                logging.warning(f"⏳ FloodWait triggered: Sleeping for {e.value} seconds")
+                await asyncio.sleep(e.value)
             except Exception as e:
                 logging.error(f"❌ Error forwarding to {dest_id}: {e}")
+
+# Flask Web Server to Keep Alive
+flask_app = Flask(__name__)
+
+@flask_app.route("/")
+def home():
+    return "Bot is running and forwarding messages!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    flask_app.run(host="0.0.0.0", port=port)
+
+# Start Flask in a separate thread
+threading.Thread(target=run_flask, daemon=True).start()
 
 # Start the bot
 if __name__ == "__main__":
